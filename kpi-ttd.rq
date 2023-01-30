@@ -1,0 +1,82 @@
+#+ summary: Returns the Key Performance Indicator of the delay between symptom onset and diagnosis.  This data is aggregated by disease, and by year of diagnosis, and is measured in days.
+#+ tags:
+#+ - KPI diagnosis-delay
+#+ defaults:
+#+ 
+#+ endpoint_in_url: False
+
+
+PREFIX sio: <http://semanticscience.org/resource/> 
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX ofn: <http://www.ontotext.com/sparql/functions/>
+
+################################################################
+# list diagnosis and time from onset to diagnosis
+################################################################
+
+SELECT DISTINCT
+    ?ORDO
+    ?yearOfDiagnosis
+    (xsd:integer(ROUND(AVG(?timeOnsetToDiagnosis))) as ?avgoffset)
+WHERE {
+    BIND(xsd:integer(ofn:asDays(?dateOfDiagnosis - ?dateOfOnset)) AS ?timeOnsetToDiagnosis)
+    BIND(SUBSTR(str(?dateOfDiagnosis), 1,4) AS ?yearOfDiagnosis)
+    {
+    SELECT DISTINCT
+        ?idValue
+        ?dateOfDiagnosis
+    WHERE { 
+        ?id sio:SIO_000020 ?role; #denotes
+        sio:SIO_000300 ?idValue. #has-value
+        ?role sio:SIO_000356 ?process. #is-realized-in
+        # diagnosis
+        ?process rdfs:label ?processLabel;
+                 sio:SIO_000229 ?processOutput. #has-output
+        ?processOutput rdfs:label ?processOutputLabel;
+                       rdf:type ?processOutputType.
+        ?processOutput sio:SIO_000300 ?dateOfDiagnosis. #has-value
+        BIND(BOUND(?processLabel) && strlen(?processLabel)>0 as ?checkDiagnosis).
+
+        FILTER (?processLabel = 'Process: Diagnosis date recording process' || !BOUND(?processLabel)).
+        FILTER (?processOutputType != <http://semanticscience.org/resource/SIO_000015>).	
+    }}
+    {
+    SELECT
+        ?idValue
+        ?dateOfOnset
+    WHERE { 
+        ?id sio:SIO_000020 ?role; #denotes
+        sio:SIO_000300 ?idValue. #has-value
+        ?role sio:SIO_000356 ?process. #is-realized-in
+        ?process rdfs:label ?processLabel;
+                 sio:SIO_000229 ?processOutput. #has-output
+        ?processOutput rdfs:label ?processOutputLabel;
+                       rdf:type ?processOutputType.
+        ?processOutput sio:SIO_000300 ?dateOfOnset. #has-value
+        BIND(BOUND(?processLabel) && strlen(?processLabel)>0 as ?checkOnset).
+
+        FILTER (?processLabel = 'Process: Symptom onset date recording process' || !BOUND(?processLabel)).
+        FILTER (?processOutputType != <http://semanticscience.org/resource/SIO_000015>).
+    }}
+    {
+    SELECT
+        ?idValue
+        ?ORDO
+    WHERE {
+        ?id sio:SIO_000020 ?role; #denotes
+        sio:SIO_000300 ?idValue. #has-value
+
+        ?entity sio:SIO_000228 ?role; #has-role
+                sio:SIO_000008 ?attribute. #has-attribute
+
+        ?output sio:SIO_000628 ?attribute. #refers-to
+        ?attribute rdf:type ?ORDO.
+        ?role rdfs:label ?roleLabel.
+        FILTER (contains(xsd:string(?ORDO), 'ORDO')).
+	}}
+} group by ?ORDO ?yearOfDiagnosis order by ?yearOfDiagnosis ?ORDO
+
+
+
